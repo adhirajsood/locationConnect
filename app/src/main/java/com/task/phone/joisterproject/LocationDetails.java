@@ -27,6 +27,7 @@ public class LocationDetails extends Activity{
     String latitude,longitude;
     private GoogleMap googleMap;
     ArrayList<Marker> mListMarkers;
+    String s;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -67,7 +68,8 @@ public class LocationDetails extends Activity{
         locationB.setLatitude(Double.valueOf(latitude));
         locationB.setLongitude(Double.valueOf(longitude));
         float distanceYou = locationA.distanceTo(locationB)/1000;
-        String s = String.format("%.2f", distanceYou);
+
+        s = String.format("%.2f", distanceYou);
 
         TextView txtBuildingName = (TextView) findViewById(R.id.txtBuildingName);
         TextView txtDistance = (TextView) findViewById(R.id.txtDistance);

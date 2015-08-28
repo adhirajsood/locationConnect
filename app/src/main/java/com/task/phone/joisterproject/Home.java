@@ -1,13 +1,20 @@
 package com.task.phone.joisterproject;
 
 import android.app.Activity;
+import android.app.AlarmManager;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
+import android.app.TaskStackBuilder;
 import android.content.Context;
 import android.content.Intent;
 import android.graphics.Color;
 import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
+import android.media.RingtoneManager;
+import android.net.Uri;
 import android.provider.SyncStateContract;
+import android.support.v4.app.NotificationCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
@@ -53,6 +60,13 @@ public class Home extends Activity implements LocationListener, IAsyncCallback {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_home);
 
+        addTabs();
+
+
+
+    }
+
+    public void addTabs(){
         TabHost tabHost = (TabHost) findViewById(R.id.tabHost);
         tabHost.setup();
 
@@ -72,7 +86,10 @@ public class Home extends Activity implements LocationListener, IAsyncCallback {
             TextView tv = (TextView) tabHost.getTabWidget().getChildAt(i).findViewById(android.R.id.title);
             tv.setTextColor(Color.parseColor("#000000"));
         }
+        initializeGoogleMaps();
+    }
 
+    public void initializeGoogleMaps(){
         if (googleMap == null) {
             googleMap = ((MapFragment) getFragmentManager().findFragmentById(
                     R.id.map)).getMap();
@@ -92,8 +109,10 @@ public class Home extends Activity implements LocationListener, IAsyncCallback {
             googleMap.clear();
         }
         mListMarkers = new ArrayList<Marker>();
+        setDataListView();
+    }
 
-
+    public void setDataListView(){
 
         lv = (ListView) findViewById(R.id.listView);
 
@@ -111,16 +130,29 @@ public class Home extends Activity implements LocationListener, IAsyncCallback {
         dbHandler = new DBHandler(this);
         JSONArray jsonArray = dbHandler.getLocationJoister();
         if (jsonArray.length()>0){
-          System.out.println("json data   "+jsonArray);
             setListView(jsonArray);
             setMapView(jsonArray);
         }else {
             APIManager.getInstance().sendAsyncCall("GET",lat,lng,Home.this);
         }
+    }
 
+    public void scheduleAlarm() {
+        // Construct an intent that will execute the AlarmReceiver
+        Intent intent = new Intent(getApplicationContext(), BackroundNotify.class);
+        // Create a PendingIntent to be triggered when the alarm goes off
+        final PendingIntent pIntent = PendingIntent.getBroadcast(this, BackroundNotify.REQUEST_CODE,
+                intent, PendingIntent.FLAG_UPDATE_CURRENT);
+        // Setup periodic alarm every 7 seconds
+        long firstMillis = System.currentTimeMillis(); // first run of alarm is immediate
+        final long intervalMillis = 10 * 60 * 1000;
+
+        AlarmManager alarm = (AlarmManager) this.getSystemService(Context.ALARM_SERVICE);
+        alarm.setInexactRepeating(AlarmManager.RTC_WAKEUP, firstMillis, intervalMillis, pIntent);
     }
 
     private void setListView(final JSONArray jsonArray) {
+        scheduleAlarm();
         CustomListLocation adapter = new CustomListLocation(Home.this, jsonArray,lat,lng);
         lv.setAdapter(adapter);
         lv.setOnItemClickListener(new AdapterView.OnItemClickListener() {
@@ -129,18 +161,19 @@ public class Home extends Activity implements LocationListener, IAsyncCallback {
 
                 try {
                     Object str = jsonArray.get(position);
-                    JSONObject jobj =  new JSONObject(str.toString());
-                    Intent intent = new Intent(Home.this,LocationDetails.class);
-                    intent.putExtra("building_name",jobj.getString("building_name"));
-                    intent.putExtra("latitude",jobj.getString("latitude"));
+                    JSONObject jobj = new JSONObject(str.toString());
+                    Intent intent = new Intent(Home.this, LocationDetails.class);
+                    intent.putExtra("building_name", jobj.getString("building_name"));
+                    intent.putExtra("latitude", jobj.getString("latitude"));
                     intent.putExtra("longitude", jobj.getString("longitude"));
-                    intent.putExtra("road_name",jobj.getString("road_name"));
-                    intent.putExtra("myLat",lat);
-                    intent.putExtra("myLong",lng);
+                    intent.putExtra("road_name", jobj.getString("road_name"));
+                    intent.putExtra("myLat", lat);
+                    intent.putExtra("myLong", lng);
                     startActivity(intent);
                 } catch (JSONException e) {
                     e.printStackTrace();
-                };
+                }
+                ;
             }
         });
     }
@@ -171,27 +204,6 @@ public class Home extends Activity implements LocationListener, IAsyncCallback {
 
     }
 
-    @Override
-    public boolean onCreateOptionsMenu(Menu menu) {
-        // Inflate the menu; this adds items to the action bar if it is present.
-        getMenuInflater().inflate(R.menu.menu_home, menu);
-        return true;
-    }
-
-    @Override
-    public boolean onOptionsItemSelected(MenuItem item) {
-        // Handle action bar item clicks here. The action bar will
-        // automatically handle clicks on the Home/Up button, so long
-        // as you specify a parent activity in AndroidManifest.xml.
-        int id = item.getItemId();
-
-        //noinspection SimplifiableIfStatement
-        if (id == R.id.action_settings) {
-            return true;
-        }
-
-        return super.onOptionsItemSelected(item);
-    }
 
     public static Location getLocation(Context mContext, LocationListener listener)
     {
@@ -256,7 +268,7 @@ public class Home extends Activity implements LocationListener, IAsyncCallback {
     }
 
 
-    public void addMapMarker(double latitude, double longitude, String buildingName, String roadName){
+    public void addMapMarker(final double latitude, final double longitude, String buildingName, String roadName){
 
         if(null != googleMap){
 
@@ -270,7 +282,20 @@ public class Home extends Activity implements LocationListener, IAsyncCallback {
 
         }
 
-        /*googleMap.setInfoWindowAdapter(new GoogleMap.InfoWindowAdapter() {
+        googleMap.setOnInfoWindowClickListener(new GoogleMap.OnInfoWindowClickListener() {
+            @Override
+            public void onInfoWindowClick(Marker marker) {
+
+                LatLng positionMarker = marker.getPosition();
+
+                Uri gmmIntentUri = Uri.parse("google.navigation:q="+positionMarker.latitude+","+positionMarker.longitude+"");
+                Intent mapIntent = new Intent(Intent.ACTION_VIEW, gmmIntentUri);
+                mapIntent.setPackage("com.google.android.apps.maps");
+                startActivity(mapIntent);
+            }
+        });
+
+        googleMap.setInfoWindowAdapter(new GoogleMap.InfoWindowAdapter() {
 
             @Override
             public View getInfoWindow(Marker arg0) {
@@ -282,7 +307,7 @@ public class Home extends Activity implements LocationListener, IAsyncCallback {
                 View v = getLayoutInflater().inflate(R.layout.custom_marker, null);
                 return PinView.pinViewClick(marker,v);
             }
-        });*/
+        });
     }
 
     @Override
@@ -307,7 +332,7 @@ public class Home extends Activity implements LocationListener, IAsyncCallback {
 
     @Override
     public void onSuccessResponse(String successResponse) {
-        System.out.println("got the success " + successResponse);
+
         try {
             JSONObject jsonObject = new JSONObject(successResponse);
             String result = jsonObject.getString("result");
@@ -330,4 +355,6 @@ public class Home extends Activity implements LocationListener, IAsyncCallback {
     public void onErrorResponse(int errorCode, String errorResponse) {
 
     }
+
+
 }
